@@ -15,15 +15,13 @@ import (
 	"time"
 
 	"encoding/json"
-	"godist/utils"
+	"godict/utils"
 
 	uuid "github.com/satori/go.uuid"
+	"github.com/spf13/cobra"
 )
 
 const (
-	rawtext  string = "通用"
-	fromlan  string = "zh-CHS"
-	tolan    string = "en"
 	signType string = "v3"
 )
 
@@ -32,12 +30,12 @@ type Config struct {
 	AppSecret string `json:"appSecret"`
 }
 
-type DistWeb struct {
+type DictWeb struct {
 	Value []string `json:"value"`
 	Key   string   `json:"key"`
 }
 
-type DistBasic struct {
+type DictBasic struct {
 	UsPhonetic string   `json:"us-phonetic"`
 	Phonetic   string   `json:"phonetic"`
 	UkPhonetic string   `json:"uk-phonetic"`
@@ -46,12 +44,12 @@ type DistBasic struct {
 	Explains   []string `json:"explains"`
 }
 
-type DistResp struct {
+type DictResp struct {
 	ErrorCode    string                 `json:"errorCode"`
 	Query        string                 `json:"query"`
 	Translation  []string               `json:"translation"`
-	Basic        DistBasic              `json:"basic"`
-	Web          []DistWeb              `json:"web,omitempty"`
+	Basic        DictBasic              `json:"basic"`
+	Web          []DictWeb              `json:"web,omitempty"`
 	Lang         string                 `json:"l"`
 	Dict         map[string]interface{} `json:"dict,omitempty"`
 	Webdict      map[string]interface{} `json:"webdict,omitempty"`
@@ -61,35 +59,48 @@ type DistResp struct {
 }
 
 var config Config
+var fromLan string
+var toLan string
 
 func main() {
-	var curpath string = GetCurrentDirectory()
+	var rootCmd = &cobra.Command{Use: "app {word}", Short: "translate words",
+		Long: `translate words to other language by cmdline`,
+		Args: cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			var curpath string = GetCurrentDirectory()
 
-	InitConfig(curpath+"/config.json", &config)
-	httpPost()
+			wordContext := strings.Join(args, " ")
+			err := InitConfig(curpath+"/config.json", &config)
+			if err != nil {
+				fmt.Println("config.json is open error.")
+				return
+			}
+			httpPost(wordContext, fromLan, toLan)
+		}}
+
+	rootCmd.Flags().StringVarP(&fromLan, "from", "f", "auto", "translate from this language")
+	rootCmd.Flags().StringVarP(&toLan, "to", "t", "auto", "translate to this language")
+	rootCmd.Execute()
 }
 
-func httpPost() {
+func httpPost(words, from, to string) {
 	var err error
 	u1 := uuid.NewV4()
-	fmt.Println("u1:", u1)
-	input := truncate(rawtext)
+	//fmt.Println("u1:", u1)
+	input := truncate(words)
 	stamp := time.Now().Unix()
 	instr := config.AppKey + input + u1.String() + strconv.FormatInt(stamp, 10) + config.AppSecret
-	fmt.Println("input:", input)
-	fmt.Println(instr)
+	//fmt.Println("input:", input)
+	//fmt.Println(instr)
 	sig := sha256.Sum256([]byte(instr))
 	var sigstr string = utils.HexBuffToString(sig[:])
-	//for _, item := range sig {
-	//	sigstr = sigstr + strconv.FormatInt(int64(item), 16)
-	//}
-	fmt.Println(sig)
-	fmt.Println(sigstr)
+	//fmt.Println(sig)
+	//fmt.Println(sigstr)
 
 	data := make(url.Values, 0)
-	data["q"] = []string{rawtext}
-	data["from"] = []string{fromlan}
-	data["to"] = []string{tolan}
+	data["q"] = []string{words}
+	data["from"] = []string{from}
+	data["to"] = []string{to}
 	data["appKey"] = []string{config.AppKey}
 	data["salt"] = []string{u1.String()}
 	data["sign"] = []string{sigstr}
@@ -109,10 +120,10 @@ func httpPost() {
 		// handle error
 	}
 
-	fmt.Println(string(body))
-	var jsonObj DistResp
+	//fmt.Println(string(body))
+	var jsonObj DictResp
 	json.Unmarshal(body, &jsonObj)
-	fmt.Println(jsonObj)
+	//fmt.Println(jsonObj)
 
 	show(&jsonObj, os.Stdout)
 }
@@ -140,21 +151,27 @@ func GetCurrentDirectory() string {
 	return strings.Replace(dir, "\\", "/", -1) //将\替换成/
 }
 
-func InitConfig(str string, cfg *Config) {
+func InitConfig(str string, cfg *Config) error {
 	fileobj, err := os.Open(str)
 	if err != nil {
-		fmt.Println("error:", err)
+		return err
 	}
+
+	defer fileobj.Close()
 
 	var fileContext []byte
 	fileContext, err = ioutil.ReadAll(fileobj)
 
 	json.Unmarshal(fileContext, cfg)
-	fmt.Println(*cfg)
+	//fmt.Println(*cfg)
+	return nil
 }
 
-func show(resp *DistResp, w io.Writer) {
-	fmt.Fprintln(w, resp.Query)
+func show(resp *DictResp, w io.Writer) {
+	if resp.ErrorCode != "0" {
+		fmt.Fprintln(w, "请输入正确的数据")
+	}
+	fmt.Fprintln(w, "@", resp.Query)
 
 	if resp.Basic.UkPhonetic != "" {
 		fmt.Fprintln(w, "英:", "[", resp.Basic.UkPhonetic, "]")
@@ -165,17 +182,17 @@ func show(resp *DistResp, w io.Writer) {
 
 	fmt.Fprintln(w, "[翻译]")
 	for key, item := range resp.Translation {
-		fmt.Fprintln(w, "\t", key, ".", item)
+		fmt.Fprintln(w, "\t", key+1, ".", item)
 	}
 	fmt.Fprintln(w, "[延伸]")
 	for key, item := range resp.Basic.Explains {
-		fmt.Fprintln(w, "\t", key, ".", item)
+		fmt.Fprintln(w, "\t", key+1, ".", item)
 	}
 
 	fmt.Fprintln(w, "[网络]")
 	for key, item := range resp.Web {
-		fmt.Fprintln(w, "\t", key, ".", item.Key)
-		fmt.Fprint(w, "\t解释:")
+		fmt.Fprintln(w, "\t", key+1, ".", item.Key)
+		fmt.Fprint(w, "\t翻译:")
 		for _, val := range item.Value {
 			fmt.Fprint(w, val, ",")
 		}

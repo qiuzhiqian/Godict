@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"encoding/json"
-	"godict/utils"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/spf13/cobra"
@@ -31,8 +30,8 @@ type Config struct {
 }
 
 type DictWeb struct {
-	Value []string `json:"value"`
 	Key   string   `json:"key"`
+	Value []string `json:"value"`
 }
 
 type DictBasic struct {
@@ -86,16 +85,11 @@ func main() {
 func httpPost(words, from, to string) {
 	var err error
 	u1 := uuid.NewV4()
-	//fmt.Println("u1:", u1)
 	input := truncate(words)
 	stamp := time.Now().Unix()
 	instr := config.AppKey + input + u1.String() + strconv.FormatInt(stamp, 10) + config.AppSecret
-	//fmt.Println("input:", input)
-	//fmt.Println(instr)
 	sig := sha256.Sum256([]byte(instr))
-	var sigstr string = utils.HexBuffToString(sig[:])
-	//fmt.Println(sig)
-	//fmt.Println(sigstr)
+	var sigstr string = HexBuffToString(sig[:])
 
 	data := make(url.Values, 0)
 	data["q"] = []string{words}
@@ -147,6 +141,7 @@ func GetCurrentDirectory() string {
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		log.Fatal(err)
+		return ""
 	}
 	return strings.Replace(dir, "\\", "/", -1) //将\替换成/
 }
@@ -163,7 +158,6 @@ func InitConfig(str string, cfg *Config) error {
 	fileContext, err = ioutil.ReadAll(fileobj)
 
 	json.Unmarshal(fileContext, cfg)
-	//fmt.Println(*cfg)
 	return nil
 }
 
@@ -198,4 +192,17 @@ func show(resp *DictResp, w io.Writer) {
 		}
 		fmt.Fprint(w, "\n")
 	}
+}
+
+func HexBuffToString(buff []byte) string {
+	var ret string
+	for _, value := range buff {
+		str := strconv.FormatUint(uint64(value), 16)
+		if len([]rune(str)) == 1 {
+			ret = ret + "0" + str
+		} else {
+			ret = ret + str
+		}
+	}
+	return ret
 }

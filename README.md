@@ -30,7 +30,7 @@ golang天然的带有网络操作的优势，所以直接借用现有的第三�
 
 网易提供了现有的api，这个api需要先注册，然后获取一个应用的key，同时会生成一个应用的密钥，此处我把这两个东西用appKey和appSecret来表示。至于怎么申请，官方流程会说的很详细
 
-![有道智云应用ID和应用密钥](E:\code\code_go\Godict\doc\img\image_1.png)
+![有道智云应用ID和应用密钥]( https://raw.githubusercontent.com/qiuzhiqian/Godict/master/doc/img/image_1.png)
 
 ## API使用方式
 
@@ -1105,3 +1105,6 @@ PS E:\code\code_go\Godict\test> .\test.exe work
 PS E:\code\code_go\Godict\test>
 ```
 
+
+
+[项目代码仓库]( https://github.com/qiuzhiqian/Godict )
